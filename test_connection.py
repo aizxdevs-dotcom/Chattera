@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
+from app.models.user import User
 
 load_dotenv()
 
@@ -19,3 +20,4 @@ try:
         print("✅ Connection successful, result:", result.single()["num"])
 except Exception as e:
     print("❌ Connection failed:", e)
+

@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from neo4j.exceptions import AuthError, ServiceUnavailable
 from app.config import driver  # official driver
-from app.routers import person  # your routes
+from app.routers import user, conversation, message, file  # your routes
 
-app = FastAPI(title="FastAPI + Neo4j (OOP with Neomodel)")
+app = FastAPI(title="Chattera")
 
 # Register routers
-app.include_router(person.router)
+app.include_router(user.router)
+app.include_router(conversation.router)
+app.include_router(message.router)
+app.include_router(file.router)
 
 @app.on_event("startup")
 def startup_db_check():
