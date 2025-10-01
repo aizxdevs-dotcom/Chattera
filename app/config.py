@@ -3,33 +3,27 @@ from dotenv import load_dotenv
 from urllib.parse import quote_plus
 from neomodel import config, db
 from neo4j import GraphDatabase
-from jose import JWTError, jwt
+from jose import jwt, JWTError
 from datetime import datetime, timedelta
 
-# Load environment variables
+# Load env vars (works locally if .env exists, ignored in Render if not provided)
 load_dotenv()
 
-NEO4J_URI = os.getenv("NEO4J_URI")       
+# Required Neo4j env vars
+NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USER = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-NEO4J_DATABASE = os.getenv("NEO4J_DATABASE") 
+NEO4J_DATABASE = os.getenv("NEO4J_DATABASE", "neo4j")  # Aura default DB name
 
 if not all([NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD]):
     raise ValueError("❌ Missing Neo4j environment variables")
 
-
+# Neo4j Driver connection
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
-
-encoded_password = quote_plus(NEO4J_PASSWORD)
-host = NEO4J_URI.split("://")[1] 
-
-config.DATABASE_URL = f"bolt+s://{NEO4J_USER}:{encoded_password}@{host}:7687"
-config.DATABASE_NAME = NEO4J_DATABASE 
-
-print(f"[ℹ️] Neomodel DATABASE_URL set to: {config.DATABASE_URL}")
-print(f"[ℹ️] Using Neo4j database: {config.DATABASE_NAME}")
-
+# -------------------------------
+# Legacy connection wrapper (for CRUD code)
+# -------------------------------
 class Neo4jConnection:
     def __init__(self, uri, user, password):
         self._driver = GraphDatabase.driver(uri, auth=(user, password))
@@ -41,38 +35,56 @@ class Neo4jConnection:
         with self._driver.session() as session:
             return session.run(query, parameters)
 
-# Neo4j Aura connection details
-NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
-
+# Exportable connection (import this in CRUD files: from app.config import neo4j_conn)
 neo4j_conn = Neo4jConnection(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
 
-SECRET_KEY = "your_secret_key_here"
+# -------------------------------
+# Configure Neomodel connection
+# -------------------------------
+encoded_password = quote_plus(NEO4J_PASSWORD)
+host = NEO4J_URI.split("://")[1]  # Extract host part only
+config.DATABASE_URL = f"bolt+s://{NEO4J_USER}:{encoded_password}@{host}"
+config.DATABASE_NAME = NEO4J_DATABASE
+
+print(f"[ℹ️] Neomodel DATABASE_URL set to: {config.DATABASE_URL}")
+print(f"[ℹ️] Using Neo4j database: {config.DATABASE_NAME}")
+
+# -------------------------------
+# JWT Authentication
+# -------------------------------
+SECRET_KEY = os.getenv("SECRET_KEY", "your_secret_key_here")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 def create_access_token(data: dict):
+    """Generate JWT token"""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def verify_access_token(token: str):
+    """Verify JWT token"""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
-
+# -------------------------------
+# Neo4j constraints
+# -------------------------------
 def setup_constraints():
     db.cypher_query("CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.email IS UNIQUE")
     db.cypher_query("CREATE CONSTRAINT IF NOT EXISTS FOR (u:User) REQUIRE u.user_id IS UNIQUE")
 
-# Reconnect to the database on startup
+# Ensure connection on startup
 def reconnect_to_db():
-    db.set_connection(config.DATABASE_URL)
+    try:
+        db.set_connection(config.DATABASE_URL)
+        print("[✅] Database reconnected successfully")
+    except Exception as e:
+        print(f"[❌] Database reconnection failed: {e}")
 
+# Run startup tasks
 setup_constraints()
 reconnect_to_db()
