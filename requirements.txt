@@ -1,5 +1,7 @@
 annotated-types==0.7.0
 anyio==4.11.0
+argon2-cffi==25.1.0
+argon2-cffi-bindings==25.1.0
 bcrypt==5.0.0
 cffi==2.0.0
 click==8.3.0
@@ -12,7 +14,6 @@ h11==0.16.0
 idna==3.10
 neo4j==5.28.2
 neomodel==5.5.2
-passlib==1.7.4
 pyasn1==0.6.1
 pycparser==2.23
 pydantic==2.11.9
@@ -27,3 +28,4 @@ starlette==0.48.0
 typing-inspection==0.4.1
 typing_extensions==4.15.0
 uvicorn==0.37.0
+passlib[argon2]==1.7.4
