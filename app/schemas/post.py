@@ -1,7 +1,8 @@
 from pydantic import BaseModel
-from typing import Optional,List
+from typing import Optional,List,Dict
 import datetime
 from app.schemas.file import FileResponse 
+from app.schemas.comment import CommentResponse
 
 class PostCreate(BaseModel):
     user_id: str                    # the author of the post
@@ -18,6 +19,9 @@ class PostResponse(BaseModel):
     created_at: datetime.datetime
     user_id: str
     files: List[FileResponse] = []  # 🆕 return metadata for attached files
+    comments: List[CommentResponse] = [] 
+    reactions: Dict[str, int] = {}
+    current_user_reaction: Optional[str] = None
 
 class FeedPostResponse(PostResponse):
     username: str

@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, status, UploadFile, File, Form
 from uuid import uuid4
 import boto3, os
 from dotenv import load_dotenv
 from typing import List, Optional
 from app.schemas.post import PostCreate, PostUpdate, PostResponse, FeedPostResponse
 from app.schemas.file import FileResponse
+from app.schemas.comment import CommentResponse
+from app.crud.comment import comment_crud
 from app.crud.post import post_crud
 from app.crud.file import file_crud
 
@@ -85,9 +87,8 @@ async def create_post_with_files(
     )
 
 
-# ✅ Get single post with files
 @router.get("/posts/{post_id}", response_model=PostResponse)
-def get_post(post_id: str):
+def get_post(post_id: str, current_user_id: Optional[str] = None):
     post_node = post_crud.get_post(post_id)
     if not post_node:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -96,23 +97,47 @@ def get_post(post_id: str):
     user_id = author_node.user_id if author_node else None
 
     files = [
-        FileResponse(
-            file_id=f.file_id,
-            url=f.url,
-            file_type=f.file_type,
-            size=f.size
-        )
+        FileResponse(file_id=f.file_id, url=f.url, file_type=f.file_type, size=f.size)
         for f in post_node.attachments
     ]
 
+    comments = []
+    for c in post_node.comments.order_by("created_at"):
+        files_attached = [
+            FileResponse(
+                file_id=f.file_id,
+                url=f.url,
+                file_type=f.file_type,
+                size=f.size
+            ) for f in c.attachments
+        ]
+
+        comment_reactions = comment_crud.get_reaction_counts(c)
+        my_comment_reaction = comment_crud.get_user_reaction(c, current_user_id) if current_user_id else None
+
+        comments.append(CommentResponse(
+            comment_id=c.comment_id,
+            description=c.description,
+            created_at=c.created_at,
+            user_id=c.user.single().user_id if c.user else None,
+            post_id=post_node.post_id,
+            files=files_attached,
+            reactions=comment_reactions,
+            current_user_reaction=my_comment_reaction
+        ))
+    
+    reactions = post_crud.get_reaction_counts(post_node)
+    my_reaction = post_crud.get_user_reaction(post_node, current_user_id) if current_user_id else None
     return PostResponse(
         post_id=post_node.post_id,
         description=post_node.description,
         created_at=post_node.created_at,
         user_id=user_id,
-        files=files
+        files=files,
+        comments=comments,
+        reactions=reactions,
+        current_user_reaction=my_reaction
     )
-
 
 # ✅ Update post (description + files)
 @router.put("/posts/{post_id}", response_model=PostResponse)
@@ -179,18 +204,22 @@ def list_posts_for_user(user_id: str):
     ]
 
 @router.get("/feed", response_model=List[FeedPostResponse])
-def get_global_feed():
+def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
+    """
+    Global feed: fetch all posts with author info, attached files,
+    comments (with files & reactions), and post reactions.
+    """
     posts = post_crud.list_all_posts()
 
     feed = []
     for post in posts:
-        # Author details
+        # ----- Author details -----
         author_node = post.author.single()
         user_id = author_node.user_id if author_node else None
         username = author_node.username if author_node else None
         email = author_node.email if author_node else None
 
-        # Attachments
+        # ----- Attachments -----
         files = [
             FileResponse(
                 file_id=f.file_id,
@@ -201,6 +230,44 @@ def get_global_feed():
             for f in post.attachments
         ]
 
+        # ----- Comments -----
+        comments = []
+        for c in post.comments.order_by("created_at"):
+            files_attached = [
+                FileResponse(
+                    file_id=f.file_id,
+                    url=f.url,
+                    file_type=f.file_type,
+                    size=f.size
+                ) for f in c.attachments
+            ]
+
+            # comment reactions
+            comment_reactions = comment_crud.get_reaction_counts(c)
+            my_comment_reaction = (
+                comment_crud.get_user_reaction(c, current_user_id)
+                if current_user_id else None
+            )
+
+            comments.append(CommentResponse(
+                comment_id=c.comment_id,
+                description=c.description,
+                created_at=c.created_at,
+                user_id=c.user.single().user_id if c.user else None,
+                post_id=post.post_id,
+                files=files_attached,
+                reactions=comment_reactions,
+                current_user_reaction=my_comment_reaction
+            ))
+
+        # ----- Post reactions -----
+        post_reactions = post_crud.get_reaction_counts(post)
+        my_reaction = (
+            post_crud.get_user_reaction(post, current_user_id)
+            if current_user_id else None
+        )
+
+        # ----- Final response -----
         feed.append(FeedPostResponse(
             post_id=post.post_id,
             description=post.description,
@@ -208,7 +275,10 @@ def get_global_feed():
             user_id=user_id,
             username=username,
             email=email,
-            files=files
+            files=files,
+            comments=comments,
+            reactions=post_reactions,
+            current_user_reaction=my_reaction
         ))
 
     return feed
