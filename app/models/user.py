@@ -17,3 +17,6 @@ class User(StructuredNode):
     received_invitations = RelationshipFrom("User", "INVITED", model=InvitationRel)
 
     contacts = RelationshipTo("User", "CONTACT")
+    authored = RelationshipTo("app.models.post.Post", "AUTHORED")
+    reactions = RelationshipTo("app.models.reaction.Reaction", "REACTED")  # user → reaction
+    comments = RelationshipTo("app.models.comment.Comment", "COMMENTED")   # user → comment

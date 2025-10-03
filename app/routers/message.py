@@ -1,47 +1,55 @@
 from fastapi import APIRouter, HTTPException
-from uuid import uuid4
 from datetime import datetime
 
 from app.schemas.message import MessageCreate, MessageResponse
 from app.crud.message import message_crud
+from app.schemas.file import FileResponse   # to include file metadata in responses
 
 router = APIRouter()
 
 
 @router.post("/messages", response_model=MessageResponse)
 def send_new_message(message: MessageCreate):
-    """Create and send a new message."""
-    message_id = str(uuid4())
-    timestamp = datetime.utcnow()  # keep datetime
+    """Create and send a new message, optionally with file attachments."""
 
     created_message = message_crud.send_message(
-        message_id=message_id,
-        content=message.content,
-        timestamp=timestamp,
         sender_id=message.sender_id,
         conversation_id=message.conversation_id,
+        content=message.content,
+        file_ids=message.file_ids  # 🆕 support multiple files
     )
-    if not created_message:
-        raise HTTPException(status_code=500, detail="Failed to send message")
 
-    # MessageResponse will auto-serialize datetime into ISO
+    if not created_message:
+        raise HTTPException(status_code=404, detail="Sender or conversation not found")
+
+    # Build response with file metadata
+    files = [
+        FileResponse(
+            file_id=f.file_id,
+            url=f.url,
+            file_type=f.file_type,
+            size=f.size
+        )
+        for f in created_message.attachments
+    ]
+
     return MessageResponse(
         message_id=created_message.message_id,
         content=created_message.content,
         timestamp=created_message.timestamp,
         sender_id=message.sender_id,
         conversation_id=message.conversation_id,
+        files=files  # 🆕 include files in response
     )
 
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageResponse])
 def get_all_messages(conversation_id: str):
-    """Fetch all messages in a given conversation."""
+    """Fetch all messages in a given conversation, with file attachments."""
     messages = message_crud.get_messages_in_conversation(conversation_id)
     if messages is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # return [] if no messages for REST best-practice
     return [
         MessageResponse(
             message_id=msg.message_id,
@@ -49,6 +57,15 @@ def get_all_messages(conversation_id: str):
             timestamp=msg.timestamp,
             sender_id=msg.sender.single().user_id if msg.sender.single() else None,
             conversation_id=conversation_id,
+            files=[
+                FileResponse(
+                    file_id=f.file_id,
+                    url=f.url,
+                    file_type=f.file_type,
+                    size=f.size
+                )
+                for f in msg.attachments
+            ]
         )
         for msg in messages
     ]
@@ -62,6 +79,16 @@ def update_message(message_id: str, new_data: MessageCreate):
         raise HTTPException(status_code=404, detail="Message not found")
 
     sender = updated_message.sender.single()
+    files = [
+        FileResponse(
+            file_id=f.file_id,
+            url=f.url,
+            file_type=f.file_type,
+            size=f.size
+        )
+        for f in updated_message.attachments
+    ]
+
     return MessageResponse(
         message_id=updated_message.message_id,
         content=updated_message.content,
@@ -70,6 +97,7 @@ def update_message(message_id: str, new_data: MessageCreate):
         conversation_id=updated_message.in_conversation.single().conversation_id
         if updated_message.in_conversation.single()
         else None,
+        files=files
     )
 
 

@@ -7,4 +7,4 @@ class File(StructuredNode):
     size = IntegerProperty(required=True)
 
     # Use dotted path for robustness
-    attached_to_message = RelationshipTo("app.models.message.Message", "ATTACHED_TO")
+    attached_to_messages = RelationshipTo("app.models.message.Message", "ATTACHED_TO")
