@@ -10,6 +10,10 @@ class User(StructuredNode):
     email = StringProperty(unique_index=True, required=True)
     password_hash = StringProperty(required=True)
 
+    full_name = StringProperty(required=False)
+    bio = StringProperty(required=False)
+    profile_photo = StringProperty(required=False) 
+
     sent_messages = RelationshipTo("app.models.message.Message", "SENT")
     member_of = RelationshipTo("app.models.conversation.Conversation", "MEMBER_OF")
 

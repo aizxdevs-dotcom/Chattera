@@ -28,6 +28,21 @@ class UserCRUD:
 
     def get_user_by_id(self, user_id):
         return User.nodes.get(user_id=user_id)
+    
+    def update_user(self, user_id: str, full_name=None, bio=None, profile_photo=None):
+        user = User.nodes.get_or_none(user_id=user_id)
+        if not user:
+            return None
+
+        if full_name is not None:
+            user.full_name = full_name
+        if bio is not None:
+            user.bio = bio
+        if profile_photo is not None:
+            user.profile_photo = profile_photo
+
+        user.save()
+        return user
 
 # Instantiate the CRUD class
 user_crud = UserCRUD(neo4j_conn)

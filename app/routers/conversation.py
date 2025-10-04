@@ -32,22 +32,33 @@ def create_new_conversation(conversation: ConversationCreate, current_user: str 
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-def get_conversation(conversation_id: str):
-    """Retrieve a conversation by ID."""
-    convo = conversation_crud.get_conversation(conversation_id)  # ✅ FIX: use get_conversation
+def get_conversation(
+    conversation_id: str,
+    current_user_id: str = Depends(get_current_user)  # ✅ require token
+):
+    """Retrieve a conversation by ID (only for authorized members)."""
+    convo = conversation_crud.get_conversation(conversation_id)
     if convo is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+
+    member_ids = [m.user_id for m in convo.members]
+    if current_user_id not in member_ids:
+        raise HTTPException(status_code=403, detail="Access denied: not a member of this conversation")
 
     return ConversationResponse(
         conversation_id=convo.conversation_id,
         is_group=convo.is_group,
-        member_ids=[m.user_id for m in convo.members]  # ✅ include members
+        member_ids=member_ids
     )
 
 
 @router.put("/conversations/{conversation_id}", response_model=ConversationResponse)
-def update_conversation(conversation_id: str, updated: ConversationCreate):
-    """Update conversation properties (currently only is_group)."""
+def update_conversation(
+    conversation_id: str,
+    updated: ConversationCreate,
+    current_user_id: str = Depends(get_current_user)   # ✅ require token
+):
+    """Update conversation properties (e.g., is_group). Only allowed for authenticated users."""
     convo = conversation_crud.update_conversation(conversation_id, is_group=updated.is_group)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -59,18 +70,26 @@ def update_conversation(conversation_id: str, updated: ConversationCreate):
     )
 
 
+
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(conversation_id: str):
-    """Delete a conversation by ID."""
+def delete_conversation(
+    conversation_id: str,
+    current_user_id: str = Depends(get_current_user)   # ✅ require token
+):
+    """Delete a conversation by ID. Requires authentication."""
     success = conversation_crud.delete_conversation(conversation_id)
     if not success:
         raise HTTPException(status_code=404, detail="Conversation not found")
-
     return {"detail": "Conversation deleted successfully"}
 
+
 @router.post("/conversations/{conversation_id}/members/{user_id}")
-def add_member(conversation_id: str, user_id: str):
-    """Add a member to a conversation."""
+def add_member(
+    conversation_id: str,
+    user_id: str,
+    current_user_id: str = Depends(get_current_user)   # ✅ require token
+):
+    """Add a member to a conversation. Requires authentication."""
     convo = conversation_crud.add_member(conversation_id, user_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation or User not found")
@@ -78,8 +97,12 @@ def add_member(conversation_id: str, user_id: str):
 
 
 @router.delete("/conversations/{conversation_id}/members/{user_id}")
-def remove_member(conversation_id: str, user_id: str):
-    """Remove a member from a conversation."""
+def remove_member(
+    conversation_id: str,
+    user_id: str,
+    current_user_id: str = Depends(get_current_user)   # ✅ require token
+):
+    """Remove a member from a conversation. Requires authentication."""
     convo = conversation_crud.remove_member(conversation_id, user_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation or User not found")
