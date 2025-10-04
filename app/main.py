@@ -3,9 +3,23 @@ from neo4j.exceptions import AuthError, ServiceUnavailable
 from app.config import driver  # official driver
 from app.routers import user, conversation, message, file, post, reaction, comment # your routes
 from app.routers import invitation, contact
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(title="Chattera")
+
+origins = [
+    "http://localhost:3000",                # local dev frontend
+    "https://soceyo-frontend.onrender.com", # example Render frontend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,          # or ["*"] for testing only
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Register routers
 app.include_router(user.router)
