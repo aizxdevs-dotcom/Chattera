@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List
-import asyncio
-
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
@@ -11,25 +9,26 @@ from app.crud.conversation import conversation_crud
 from app.routers.user import get_current_user
 from app.services.presence_manager import is_user_active
 
-router = APIRouter()
-
+router = APIRouter(tags=["Conversations"])
 
 # ------------------------------------------------------------------
 # Create conversation
 # ------------------------------------------------------------------
-@router.post("/conversations",
-             response_model=ConversationResponse,
-             status_code=status.HTTP_201_CREATED)
-def create_conversation(
+@router.post(
+    "/conversations",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_conversation(
     convo_data: ConversationCreate,
     current_user_id: str = Depends(get_current_user),
 ):
     """
     Create a new conversation with provided member IDs.
-    Automatically adds the current user if not in the list.
+    Automatically adds the current user if not already included.
     """
     member_ids = set(convo_data.member_ids)
-    member_ids.add(current_user_id)  # include creator
+    member_ids.add(current_user_id)
 
     convo = conversation_crud.create_conversation(
         is_group=convo_data.is_group,
@@ -40,7 +39,7 @@ def create_conversation(
 
     members: list[ConversationMember] = []
     for u in convo.members:
-        active = asyncio.run(is_user_active(u.user_id))  # 🔹 check presence
+        active = await is_user_active(u.user_id)  # ✅ proper await
         members.append(
             ConversationMember(
                 user_id=u.user_id,
@@ -60,13 +59,15 @@ def create_conversation(
 # ------------------------------------------------------------------
 # Get single conversation
 # ------------------------------------------------------------------
-@router.get("/conversations/{conversation_id}",
-            response_model=ConversationResponse)
-def get_conversation(
+@router.get(
+    "/conversations/{conversation_id}",
+    response_model=ConversationResponse,
+)
+async def get_conversation(
     conversation_id: str,
     current_user_id: str = Depends(get_current_user),
 ):
-    """Retrieve a conversation by ID, only for members."""
+    """Retrieve a conversation by ID.  Only members may access."""
     convo = conversation_crud.get_conversation(conversation_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -76,12 +77,12 @@ def get_conversation(
     if current_user_id not in member_ids:
         raise HTTPException(
             status_code=403,
-            detail="Access denied: not a member of this conversation"
+            detail="Access denied: not a member of this conversation",
         )
 
     members: list[ConversationMember] = []
     for u in member_nodes:
-        active = asyncio.run(is_user_active(u.user_id))  # 🔹 include activity flag
+        active = await is_user_active(u.user_id)
         members.append(
             ConversationMember(
                 user_id=u.user_id,
@@ -99,11 +100,13 @@ def get_conversation(
 
 
 # ------------------------------------------------------------------
-# Update conversation (e.g. group/private toggle)
+# Update conversation (e.g. toggle group/private)
 # ------------------------------------------------------------------
-@router.put("/conversations/{conversation_id}",
-            response_model=ConversationResponse)
-def update_conversation(
+@router.put(
+    "/conversations/{conversation_id}",
+    response_model=ConversationResponse,
+)
+async def update_conversation(
     conversation_id: str,
     data: ConversationCreate,
     current_user_id: str = Depends(get_current_user),
@@ -116,7 +119,7 @@ def update_conversation(
 
     members: list[ConversationMember] = []
     for u in convo.members:
-        active = asyncio.run(is_user_active(u.user_id))
+        active = await is_user_active(u.user_id)
         members.append(
             ConversationMember(
                 user_id=u.user_id,
@@ -137,7 +140,7 @@ def update_conversation(
 # Delete conversation
 # ------------------------------------------------------------------
 @router.delete("/conversations/{conversation_id}")
-def delete_conversation(
+async def delete_conversation(
     conversation_id: str,
     current_user_id: str = Depends(get_current_user),
 ):
@@ -148,10 +151,10 @@ def delete_conversation(
 
 
 # ------------------------------------------------------------------
-# Add/Remove members
+# Add / Remove members
 # ------------------------------------------------------------------
 @router.post("/conversations/{conversation_id}/members/{user_id}")
-def add_member_to_conversation(
+async def add_member_to_conversation(
     conversation_id: str,
     user_id: str,
     current_user_id: str = Depends(get_current_user),
@@ -163,7 +166,7 @@ def add_member_to_conversation(
 
 
 @router.delete("/conversations/{conversation_id}/members/{user_id}")
-def remove_member_from_conversation(
+async def remove_member_from_conversation(
     conversation_id: str,
     user_id: str,
     current_user_id: str = Depends(get_current_user),
