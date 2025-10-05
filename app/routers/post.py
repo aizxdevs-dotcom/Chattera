@@ -11,7 +11,7 @@ from app.crud.post import post_crud
 from app.crud.file import file_crud
 from app.config import verify_access_token
 from fastapi.security import HTTPBearer
-
+from app.crud.user import user_crud 
 
 
 router = APIRouter()
@@ -302,12 +302,15 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
 @router.get("/users/{user_id}/posts", response_model=List[PostResponse])
 def list_posts_for_user(
     user_id: str,
-    current_user_id: str = Depends(get_current_user)   # ✅ require token
+    current_user_id: str = Depends(get_current_user)
 ):
-    """List posts for a specific user (requires authentication)."""
     posts = post_crud.list_posts_by_user(user_id)
     if not posts:
         raise HTTPException(status_code=404, detail="No posts found for this user")
+
+    user = user_crud.get_user_by_id(user_id)
+    username = user.username if user else None
+    email = user.email if user else None
 
     return [
         PostResponse(
@@ -315,6 +318,8 @@ def list_posts_for_user(
             description=p.description,
             created_at=p.created_at,
             user_id=user_id,
+            username=username,  # ✅ new
+            email=email,        # ✅ new
             files=[
                 FileResponse(
                     file_id=f.file_id,

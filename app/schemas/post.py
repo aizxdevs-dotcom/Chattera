@@ -18,8 +18,10 @@ class PostResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime.datetime
     user_id: str
-    files: List[FileResponse] = []  # 🆕 return metadata for attached files
-    comments: List[CommentResponse] = [] 
+    username: Optional[str] = None       # ✅ added
+    email: Optional[str] = None          # ✅ added
+    files: List[FileResponse] = []
+    comments: List[CommentResponse] = []
     reactions: Dict[str, int] = {}
     current_user_reaction: Optional[str] = None
 
