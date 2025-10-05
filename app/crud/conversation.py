@@ -1,3 +1,5 @@
+from uuid import uuid4
+from typing import List, Optional
 from app.config import neo4j_conn
 from app.models import Conversation, User
 
@@ -6,64 +8,68 @@ class ConversationCRUD:
     def __init__(self, connection):
         self.connection = connection
 
-    def create_conversation(self, conversation_id: str, is_group: bool, member_ids: list[str]):
-        conversation = Conversation(
-            conversation_id=conversation_id,
-            is_group=is_group
-        ).save()
+    # ------------------------------------------------------------------
+    # Create conversation with members
+    # ------------------------------------------------------------------
+    def create_conversation(
+        self,
+        is_group: bool,
+        member_ids: List[str]
+    ) -> Optional[Conversation]:
+        """
+        Create a new conversation node and connect all given members.
+        """
+        convo = Conversation(conversation_id=str(uuid4()), is_group=is_group).save()
 
         for member_id in member_ids:
-            user = User.nodes.get(user_id=member_id)
-            user.member_of.connect(conversation)
+            user = User.nodes.get_or_none(user_id=member_id)
+            if user:
+                user.member_of.connect(convo)
 
-        return conversation
-    def add_member(self, conversation_id: str, user_id: str) -> Conversation | None:
-        """Add a member (User) to an existing conversation."""
-        conversation = Conversation.nodes.get_or_none(conversation_id=conversation_id)
-        if not conversation:
-            return None
+        return convo
 
+    # ------------------------------------------------------------------
+    # Add / remove members
+    # ------------------------------------------------------------------
+    def add_member(self, conversation_id: str, user_id: str) -> Optional[Conversation]:
+        convo = Conversation.nodes.get_or_none(conversation_id=conversation_id)
         user = User.nodes.get_or_none(user_id=user_id)
-        if not user:
+        if not convo or not user:
             return None
+        user.member_of.connect(convo)
+        return convo
 
-        user.member_of.connect(conversation)
-        return conversation
-    def remove_member(self, conversation_id: str, user_id: str) -> Conversation | None:
-        """Remove a member (User) from an existing conversation."""
-        conversation = Conversation.nodes.get_or_none(conversation_id=conversation_id)
-        if not conversation:
-            return None
-
+    def remove_member(self, conversation_id: str, user_id: str) -> Optional[Conversation]:
+        convo = Conversation.nodes.get_or_none(conversation_id=conversation_id)
         user = User.nodes.get_or_none(user_id=user_id)
-        if not user:
+        if not convo or not user:
             return None
+        user.member_of.disconnect(convo)
+        return convo
 
-        # disconnect relationship if it exists
-        user.member_of.disconnect(conversation)
-        return conversation
-
-    def get_conversation(self, conversation_id: str) -> Conversation | None:
+    # ------------------------------------------------------------------
+    # Get / update / delete
+    # ------------------------------------------------------------------
+    def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
         return Conversation.nodes.get_or_none(conversation_id=conversation_id)
 
-    def update_conversation(self, conversation_id: str, is_group: bool = None) -> Conversation | None:
-        """Update a conversation’s properties (currently only is_group)."""
-        conversation = Conversation.nodes.get_or_none(conversation_id=conversation_id)
-        if not conversation:
+    def update_conversation(
+        self, conversation_id: str, is_group: Optional[bool] = None
+    ) -> Optional[Conversation]:
+        convo = Conversation.nodes.get_or_none(conversation_id=conversation_id)
+        if not convo:
             return None
         if is_group is not None:
-            conversation.is_group = is_group
-        conversation.save()
-        return conversation
+            convo.is_group = is_group
+        convo.save()
+        return convo
 
     def delete_conversation(self, conversation_id: str) -> bool:
-        """Delete a conversation node and all its relationships."""
-        conversation = Conversation.nodes.get_or_none(conversation_id=conversation_id)
-        if not conversation:
+        convo = Conversation.nodes.get_or_none(conversation_id=conversation_id)
+        if not convo:
             return False
-        conversation.delete()
+        convo.delete()
         return True
-
 
 
 conversation_crud = ConversationCRUD(neo4j_conn)

@@ -1,27 +1,33 @@
 from fastapi import FastAPI
 from neo4j.exceptions import AuthError, ServiceUnavailable
-from app.config import driver  # official driver
-from app.routers import user, conversation, message, file, post, reaction, comment # your routes
-from app.routers import invitation, contact
+from app.config import (
+    driver,
+    Redis, redis_client,
+    REDIS_HOST, REDIS_PORT, REDIS_USERNAME, REDIS_PASSWORD, REDIS_SSL,
+)
+from app.routers import (
+    user, conversation, message, file,
+    post, reaction, comment,
+    invitation, contact, presence
+)
 from fastapi.middleware.cors import CORSMiddleware
-
 
 app = FastAPI(title="Chattera")
 
 origins = [
-    "http://localhost:3000",                # local dev frontend
-    "https://soceyo-frontend.onrender.com", # example Render frontend URL
+    "http://localhost:3000",
+    "https://soceyo-frontend.onrender.com",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # or ["*"] for testing only
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routers
+# ——— Routers ———
 app.include_router(user.router)
 app.include_router(conversation.router)
 app.include_router(message.router)
@@ -29,9 +35,11 @@ app.include_router(file.router)
 app.include_router(invitation.router)
 app.include_router(contact.router)
 app.include_router(post.router)
-app.include_router(reaction.router)   # 🆕
+app.include_router(reaction.router)
 app.include_router(comment.router)
+app.include_router(presence.router, prefix="/api")
 
+# ——— Startup / Shutdown ———
 @app.on_event("startup")
 def startup_db_check():
     try:
@@ -39,7 +47,7 @@ def startup_db_check():
             session.run("RETURN 1")
         print("[✅] Official driver connected to Neo4j successfully!")
     except AuthError:
-        print("[❌] Authentication failed. Check NEO4J_USER / NEO4J_PASSWORD in .env")
+        print("[❌] Authentication failed. Check NEO4J_USER / NEO4J_PASSWORD .env")
         raise
     except ServiceUnavailable:
         print("[❌] Cannot connect to Neo4j Aura. Check NEO4J_URI and internet.")
@@ -48,7 +56,26 @@ def startup_db_check():
         print(f"[❌] Unexpected Neo4j error: {e}")
         raise
 
+@app.on_event("startup")
+async def connect_redis():
+    from app import config
+    config.redis_client = Redis(
+        host=REDIS_HOST, port=REDIS_PORT,
+        username=REDIS_USERNAME, password=REDIS_PASSWORD,
+        ssl=REDIS_SSL,
+        decode_responses=True,
+    )
+    try:
+        pong = await config.redis_client.ping()
+        print(f"[✅] Redis connected (PING → {pong})")
+    except Exception as e:
+        print(f"[❌] Redis connection failed: {e}")
+
 @app.on_event("shutdown")
-def shutdown_db_connection():
+async def shutdown_connections():
+    from app import config
+    if config.redis_client:
+        await config.redis_client.close()
+        print("[ℹ️] Redis connection closed.")
     driver.close()
     print("[ℹ️] Official driver connection closed.")

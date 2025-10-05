@@ -3,7 +3,8 @@ from neomodel import (
     RelationshipTo, RelationshipFrom
 )
 from datetime import datetime
-
+# in app/models/conversation.py
+messages = RelationshipFrom("app.models.message.Message", "IN_CONVERSATION")
 class Message(StructuredNode):
     message_id = StringProperty(unique_index=True, required=True)
     content = StringProperty(required=True)
