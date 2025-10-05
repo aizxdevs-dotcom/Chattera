@@ -41,12 +41,35 @@ bucket = os.getenv("AWS_BUCKET_NAME")
 # -------------------------------------------------------------------------
 bearer_scheme = HTTPBearer(auto_error=False)
 
-def get_current_user(token=Security(bearer_scheme)) -> str:
-    """Extract user ID from a valid JWT bearer token."""
+def get_current_user(token = Security(bearer_scheme)) -> str:
+    """Extract and validate the user ID from a JWT bearer token."""
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = verify_access_token(token.credentials)
-    return payload["sub"]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    try:
+        payload = verify_access_token(token.credentials)
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token verification failed: {e}",
+        )
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    return user_id
 
 def hash_password(password: str) -> str:
     """Hash password securely with Argon2."""
