@@ -73,7 +73,7 @@ async def create_post_with_files(
                     object_name,               # ✅ was 'filename'
                     ExtraArgs={
                         "ContentType": file.content_type,
-                        "ACL": "public-read",  # ✅ make files visible
+                                 
                     },
                 )
             except Exception as e:
