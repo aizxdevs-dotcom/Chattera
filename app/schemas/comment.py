@@ -20,3 +20,5 @@ class CommentResponse(BaseModel):
     files: List[FileResponse] = []             # ✅ return file metadata
     reactions: Dict[str, int] = {}             # ✅ reaction counts
     current_user_reaction: Optional[str] = None # ✅ viewer’s reaction
+    username: Optional[str] = None
+    user_profile_url: Optional[str] = None

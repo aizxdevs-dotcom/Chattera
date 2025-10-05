@@ -153,12 +153,19 @@ def get_comments(post_id: str, current_user_id: Optional[str] = None):
             if current_user_id else None
         )
 
+        try:
+            user_node = c.user.single()
+        except Exception:
+            user_node = None
+
         response.append(CommentResponse(
             comment_id=c.comment_id,
             description=c.description,
             created_at=c.created_at,
             user_id=c.user.single().user_id if c.user else None,
             post_id=post_id,
+            username=getattr(user_node, "username", None),
+            user_profile_url=getattr(user_node, "profile_photo", None),
             files=files,
             reactions=reactions,
             current_user_reaction=my_reaction
