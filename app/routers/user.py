@@ -157,23 +157,37 @@ async def upload_profile_photo(
     file: UploadFile = File(..., description="Profile photo"),
     current_user_id: str = Depends(get_current_user),
 ):
+    # ✅ Allow only self‑updates
     if str(user_id) != current_user_id:
         raise HTTPException(status_code=403, detail="Not allowed to update this photo")
 
+    # ✅ Validate file type
     if file.content_type not in {"image/jpeg", "image/png"}:
-        raise HTTPException(status_code=400, detail="Only JPEG/PNG files are allowed")
+        raise HTTPException(status_code=400, detail="Only JPEG or PNG files are allowed")
 
-    filename = f"profile_photos/{user_id}_{file.filename}"
+    # ✅ Use a unique, non‑colliding filename (user_id + random/uuid + timestamp)
+    unique_suffix = uuid4().hex
+    object_name = f"profile_photos/{user_id}_{unique_suffix}_{file.filename}"
 
     try:
         s3.upload_fileobj(
-            file.file, bucket, filename, ExtraArgs={"ContentType": file.content_type}
+            file.file,
+            bucket,
+            object_name,
+            ExtraArgs={"ContentType": file.content_type},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"S3 upload failed: {e}")
 
-    file_url = f"https://{bucket}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{filename}"
-    updated_user = user_crud.update_user(str(user_id), profile_photo=file_url)
+    # ✅ Cache‑busting public URL
+    region = os.getenv("AWS_REGION")
+    file_url = f"https://{bucket}.s3.{region}.amazonaws.com/{object_name}?v={unique_suffix}"
+
+    # ✅ Update only this single user
+    updated_user = user_crud.update_user(
+        str(user_id),
+        profile_photo=file_url,
+    )
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found")
 

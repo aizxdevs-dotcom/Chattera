@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal,Optional
 import datetime
 
 class ReactionCreate(BaseModel):
@@ -13,3 +13,5 @@ class ReactionResponse(BaseModel):
     created_at: datetime.datetime
     user_id: str
     post_id: str
+    username: Optional[str] = None          # ✅ add
+    user_profile_url: Optional[str] = None
