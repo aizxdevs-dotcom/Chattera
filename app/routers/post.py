@@ -240,16 +240,19 @@ def delete_post(post_id: str, current_user_id: str = Depends(get_current_user)):
 # -----------------------------------------------------------------------------
 @router.get("/feed", response_model=List[FeedPostResponse])
 def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
-    """Return global feed with author, files, comments and reactions."""
+    """Return global feed with author info, files, comments, and reactions."""
     posts = post_crud.list_all_posts()
     feed = []
 
     for post in posts:
+        # --- Author information ---
         author_node = post.author.single()
-        user_id = author_node.user_id if author_node else None
-        username = author_node.username if author_node else None
-        email = author_node.email if author_node else None
+        user_id = getattr(author_node, "user_id", None)
+        username = getattr(author_node, "username", None)
+        email = getattr(author_node, "email", None)
+        profile_url = getattr(author_node, "profile_photo", None)
 
+        # --- Post files ---
         files = [
             FileResponse(
                 file_id=f.file_id,
@@ -260,8 +263,19 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
             for f in post.attachments
         ]
 
+        # --- Comments (with commenter info & attachments) ---
         comments = []
         for c in post.comments.order_by("created_at"):
+            user_node = None
+            try:
+                user_node = c.user.single()
+            except Exception:
+                user_node = None
+
+            commenter_id = getattr(user_node, "user_id", None)
+            commenter_name = getattr(user_node, "username", None)
+            commenter_photo = getattr(user_node, "profile_photo", None)
+
             files_attached = [
                 FileResponse(
                     file_id=f.file_id,
@@ -271,25 +285,30 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
                 )
                 for f in c.attachments
             ]
+
             comment_reactions = comment_crud.get_reaction_counts(c)
             my_comment_reaction = (
                 comment_crud.get_user_reaction(c, current_user_id)
                 if current_user_id
                 else None
             )
+
             comments.append(
                 CommentResponse(
                     comment_id=c.comment_id,
                     description=c.description,
                     created_at=c.created_at,
-                    user_id=c.user.single().user_id if c.user else None,
+                    user_id=commenter_id,
                     post_id=post.post_id,
+                    username=commenter_name,
+                    user_profile_url=commenter_photo,
                     files=files_attached,
                     reactions=comment_reactions,
                     current_user_reaction=my_comment_reaction,
                 )
             )
 
+        # --- Post reactions ---
         post_reactions = post_crud.get_reaction_counts(post)
         my_reaction = (
             post_crud.get_user_reaction(post, current_user_id)
@@ -297,6 +316,7 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
             else None
         )
 
+        # --- Build feed item ---
         feed.append(
             FeedPostResponse(
                 post_id=post.post_id,
@@ -305,6 +325,7 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
                 user_id=user_id,
                 username=username,
                 email=email,
+                user_profile_url=profile_url,  # ✅ include author’s avatar
                 files=files,
                 comments=comments,
                 reactions=post_reactions,
@@ -313,7 +334,6 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
         )
 
     return feed
-
 
 # -----------------------------------------------------------------------------
 @router.get("/users/{user_id}/posts", response_model=List[PostResponse])

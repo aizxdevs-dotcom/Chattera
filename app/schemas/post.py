@@ -24,6 +24,7 @@ class PostResponse(BaseModel):
     comments: List[CommentResponse] = []
     reactions: Dict[str, int] = {}
     current_user_reaction: Optional[str] = None
+    user_profile_url: Optional[str] = None   
 
 class FeedPostResponse(PostResponse):
     username: str
