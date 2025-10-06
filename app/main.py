@@ -12,11 +12,12 @@ from app.routers import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Chattera")
+app = FastAPI(title="Soceyo")
 
 origins = [
     "http://localhost:3000",
-    "https://soceyo-frontend.onrender.com",
+    "https://soceyo-frontend.vercel.app",
+    "https://soceyo.onrender.com", 
 ]
 
 app.add_middleware(
