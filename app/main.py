@@ -16,7 +16,7 @@ app = FastAPI(title="Soceyo")
 
 origins = [
     "http://localhost:3000",
-    "https://soceyo-frontend.vercel.app",
+    "https://soceyo.vercel.app",
     "https://soceyo.onrender.com", 
 ]
 
