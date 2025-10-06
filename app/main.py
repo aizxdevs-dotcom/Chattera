@@ -28,15 +28,15 @@ app.add_middleware(
 )
 
 # ——— Routers ———
-app.include_router(user.router)
-app.include_router(conversation.router)
-app.include_router(message.router)
-app.include_router(file.router)
-app.include_router(invitation.router)
-app.include_router(contact.router)
-app.include_router(post.router)
-app.include_router(reaction.router)
-app.include_router(comment.router)
+app.include_router(user.router, prefix="/api")
+app.include_router(conversation.router, prefix="/api")
+app.include_router(message.router, prefix="/api")
+app.include_router(file.router, prefix="/api")
+app.include_router(invitation.router, prefix="/api")
+app.include_router(contact.router, prefix="/api")
+app.include_router(post.router, prefix="/api")
+app.include_router(reaction.router, prefix="/api")
+app.include_router(comment.router, prefix="/api")
 app.include_router(presence.router, prefix="/api")
 
 # ——— Startup / Shutdown ———
