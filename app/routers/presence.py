@@ -1,19 +1,26 @@
-from fastapi import APIRouter
-from app.services.presence_manager import get_active_user_ids
+from fastapi import APIRouter, Depends
+from app.services.presence_manager import mark_user_active, get_active_user_ids
 from app.models.user import User
-from app.schemas.conversation import ConversationMember  # or a similar user schema
+from app.schemas.conversation import ConversationMember
+from app.routers.user import get_current_user   # 👈 for identifying the caller
 
-router = APIRouter(tags=["Presence"])
+router = APIRouter(prefix="/api", tags=["Presence"])
+
 
 @router.get("/active-users", response_model=list[ConversationMember])
-async def list_active_users():
+async def list_active_users(current_user_id: str = Depends(get_current_user)):
     """
     Return all users currently marked active in Redis.
-    Each item includes user_id, username, profile photo, and is_active flag.
+    Also refresh the TTL for the calling user so they stay marked online.
     """
+    # 1️⃣ Mark the current requester as active
+    await mark_user_active(current_user_id)
+
+    # 2️⃣ Fetch all keys (currently online users)
     ids = await get_active_user_ids()
     users: list[ConversationMember] = []
 
+    # 3️⃣ Build the response model
     for uid in ids:
         u = User.nodes.get_or_none(user_id=uid)
         if u:
