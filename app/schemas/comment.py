@@ -5,7 +5,7 @@ from app.schemas.file import FileResponse
 
 
 class CommentCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     post_id: str
     description: Optional[str] = ""            # ✅ use description only
     file_ids: Optional[List[str]] = []         # ✅ optional multiple files
