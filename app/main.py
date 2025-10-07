@@ -11,6 +11,7 @@ from app.routers import (
     invitation, contact, presence
 )
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import notification
 
 app = FastAPI(title="Soceyo")
 
@@ -39,6 +40,7 @@ app.include_router(post.router, prefix="/api")
 app.include_router(reaction.router, prefix="/api")
 app.include_router(comment.router, prefix="/api")
 app.include_router(presence.router, prefix="/api")
+app.include_router(notification.router, prefix="/api")
 
 # ——— Startup / Shutdown ———
 @app.on_event("startup")

@@ -37,7 +37,7 @@ def add_comment(
         current_user_id,
         comment.post_id,
         comment.description,
-        comment.file_ids
+        comment.file_ids or None
     )
     if not comment_node:
         raise HTTPException(status_code=404, detail="User or Post not found")
@@ -112,7 +112,7 @@ async def create_comment_with_files(
                 ))
 
     comment_node = comment_crud.add_comment(
-        current_user_id, post_id, description, file_ids  # ✅ secure user source
+        current_user_id, post_id, description, file_ids or None # ✅ secure user source
     )
     if not comment_node:
         raise HTTPException(status_code=404, detail="User or Post not found")

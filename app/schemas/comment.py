@@ -8,7 +8,7 @@ class CommentCreate(BaseModel):
     user_id: Optional[str] = None
     post_id: str
     description: Optional[str] = ""            # ✅ use description only
-    file_ids: Optional[List[str]] = []         # ✅ optional multiple files
+    file_ids: Optional[List[str]] = None        # ✅ optional multiple files
 
 
 class CommentResponse(BaseModel):

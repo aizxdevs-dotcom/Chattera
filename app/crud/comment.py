@@ -1,8 +1,21 @@
 from uuid import uuid4
 from app.models import Comment, User, Post, File
+from app.crud.notification import notification_crud
+
 
 class CommentCRUD:
-    def add_comment(self, user_id: str, post_id: str, description: str = None, file_ids: list[str] = None) -> Comment | None:
+    def add_comment(
+        self,
+        user_id: str,
+        post_id: str,
+        description: str = None,
+        file_ids: list[str] = None
+    ) -> Comment | None:
+        """
+        Create a comment, connect it to the user and post,
+        attach optional files, and generate a notification
+        for the post author if applicable.
+        """
         user = User.nodes.get_or_none(user_id=user_id)
         post = Post.nodes.get_or_none(post_id=post_id)
         if not user or not post:
@@ -21,6 +34,22 @@ class CommentCRUD:
                 if file_node:
                     comment.attachments.connect(file_node)
 
+        # ---- Notification logic ----
+        try:
+            author = post.author.single()
+            # only notify if commenting on another user's post
+            if author and author.user_id != user.user_id:
+                message = f"{user.username} commented on your post"
+                notification_crud.create_notification(
+                    receiver_id=author.user_id,
+                    sender_id=user.user_id,
+                    post_id=post.post_id,
+                    type_="comment",
+                    message=message,
+                )
+        except Exception as e:
+            print(f"[⚠️] Failed to create comment notification: {e}")
+
         return comment
 
     def list_comments_for_post(self, post_id: str) -> list[Comment]:
@@ -28,7 +57,7 @@ class CommentCRUD:
         if not post:
             return []
         return list(post.comments.order_by("created_at"))
-    
+
     def get_reaction_counts(self, comment) -> dict[str, int]:
         counts = {"like": 0, "haha": 0, "sad": 0, "angry": 0, "care": 0}
         for r in comment.reactions:
@@ -42,5 +71,6 @@ class CommentCRUD:
             if u and u.user_id == user_id:
                 return r.type
         return None
+
 
 comment_crud = CommentCRUD()

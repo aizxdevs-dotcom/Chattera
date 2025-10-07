@@ -47,27 +47,19 @@ def get_reactions(post_id: str):
     response: list[ReactionResponse] = []
 
     for r in reactions:
-        # Get the user node connected by the REACTED relationship
-        user_node = None
         try:
             user_node = r.user.single()
         except Exception:
             user_node = None
 
-        username = getattr(user_node, "username", None)
-        profile_url = getattr(user_node, "profile_photo", None)
-        user_id = getattr(user_node, "user_id", None)
-
-        response.append(
-            ReactionResponse(
-                reaction_id=r.reaction_id,
-                type=r.type,
-                created_at=r.created_at,
-                user_id=user_id,
-                username=username,                 # ✅ include
-                user_profile_url=profile_url,       # ✅ include
-                post_id=post_id,
-            )
-        )
+        response.append(ReactionResponse(
+            reaction_id=r.reaction_id,
+            type=r.type,
+            created_at=r.created_at,
+            user_id=getattr(user_node, "user_id", None),
+            username=getattr(user_node, "username", None),
+            user_profile_url=getattr(user_node, "profile_photo", None),
+            post_id=post_id,
+        ))
 
     return response
