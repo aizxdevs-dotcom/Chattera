@@ -12,7 +12,8 @@ from app.routers import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import notification
-from app.routers import chat_ws
+from app.routers import ws_chat
+
 
 
 app = FastAPI(title="Soceyo")
@@ -43,7 +44,8 @@ app.include_router(reaction.router, prefix="/api")
 app.include_router(comment.router, prefix="/api")
 app.include_router(presence.router, prefix="/api")
 app.include_router(notification.router, prefix="/api")
-app.include_router(chat_ws.router)
+app.include_router(ws_chat.router)
+
 
 # ——— Startup / Shutdown ———
 @app.on_event("startup")

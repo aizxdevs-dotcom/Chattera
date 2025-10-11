@@ -206,13 +206,25 @@ async def add_member_to_conversation(
     user_id: str,
     current_user_id: str = Depends(get_current_user),
 ):
-    """Add a user to an existing conversation."""
+    """Add a user to an existing conversation (only members can add)."""
+    convo = conversation_crud.get_conversation(conversation_id)
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Ensure current user is already a member
+    member_ids = [m.user_id for m in convo.members]
+    if current_user_id not in member_ids:
+        raise HTTPException(status_code=403, detail="You are not a member of this conversation")
+
     convo = conversation_crud.add_member(conversation_id, user_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation or User not found")
-    return {"detail": f"User {user_id} added to conversation {conversation_id}"}
 
+    from app.crud.user import user_crud  # inline import to avoid circular reference
+    user = user_crud.get_user_by_id(user_id)
+    username = getattr(user, "username", user_id)
 
+    return {"detail": f"{username} added to the conversation"}
 @router.delete(
     "/conversations/{conversation_id}/members/{user_id}",
     status_code=status.HTTP_200_OK,
@@ -222,8 +234,22 @@ async def remove_member_from_conversation(
     user_id: str,
     current_user_id: str = Depends(get_current_user),
 ):
-    """Remove a user from a conversation."""
+    """Remove a user from a conversation (must be an existing member)."""
+    convo = conversation_crud.get_conversation(conversation_id)
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Ensure current user is a member
+    member_ids = [m.user_id for m in convo.members]
+    if current_user_id not in member_ids:
+        raise HTTPException(status_code=403, detail="You are not a member of this conversation")
+
     convo = conversation_crud.remove_member(conversation_id, user_id)
     if not convo:
         raise HTTPException(status_code=404, detail="Conversation or User not found")
-    return {"detail": f"User {user_id} removed from conversation {conversation_id}"}
+
+    from app.crud.user import user_crud
+    user = user_crud.get_user_by_id(user_id)
+    username = getattr(user, "username", user_id)
+
+    return {"detail": f"{username} removed from the conversation"}

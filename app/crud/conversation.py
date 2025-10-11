@@ -70,6 +70,19 @@ class ConversationCRUD:
             return False
         convo.delete()
         return True
+    
+        # ------------------------------------------------------------------
+    # List conversations for a user
+    # ------------------------------------------------------------------
+    def list_user_conversations(self, user_id: str) -> List[Conversation]:
+        """
+        Return all conversations that include the given user as a member.
+        """
+        user = User.nodes.get_or_none(user_id=user_id)
+        if not user:
+            return []
+        # Retrieve through the relationship defined in User model (member_of)
+        return list(user.member_of.all())
 
 
 conversation_crud = ConversationCRUD(neo4j_conn)

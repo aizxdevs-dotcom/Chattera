@@ -7,8 +7,21 @@ from app.models.post import Post
 
 class NotificationCRUD:
     @staticmethod
-    def create_notification(receiver_id: str, sender_id: str, post_id: str, type_: str, message: str):
+    def create_notification(receiver_id: str, sender_id: str, post_id: str, type_: str, message: str = None):
+        """
+        Creates a separate notification for each distinct event (like/comment).
+        Generates a default message if not provided.
+        """
         notification_id = str(uuid4())
+
+        # Ensure message consistency (auto-generate if missing)
+        if not message:
+            if type_ == "like":
+                message = "User liked your post"
+            elif type_ == "comment":
+                message = "User commented on your post"
+            else:
+                message = "New activity on your post"
 
         notif = Notification(
             notification_id=notification_id,
@@ -19,7 +32,7 @@ class NotificationCRUD:
             message=message,
         ).save()
 
-        # optional relationships
+        # create relationships safely
         try:
             sender = User.nodes.get(user_id=sender_id)
             notif.sender.connect(sender)

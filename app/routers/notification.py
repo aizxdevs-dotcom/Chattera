@@ -38,7 +38,7 @@ def get_my_notifications(current_user_id: str = Depends(get_current_user_id)):
                 created_at=n.created_at,
                 is_read=n.is_read,
                 sender_username=getattr(sender, "username", None),
-                sender_profile_photo=getattr(sender, "profile_photo", None),
+                sender_profile_photo_url=getattr(sender, "profile_photo", None),
                 post_description=getattr(post, "description", None),
             )
         )

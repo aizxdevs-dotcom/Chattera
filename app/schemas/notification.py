@@ -26,4 +26,4 @@ class NotificationResponse(NotificationBase):
     post_description: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True  # ✅ updated for Pydantic v2
