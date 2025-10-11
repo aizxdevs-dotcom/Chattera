@@ -5,7 +5,7 @@ from app.crud.conversation import conversation_crud
 from app.routers.user import get_current_user
 from app.services.presence_manager import is_user_active
 
-router = APIRouter(prefix="/api", tags=["Conversations"])
+router = APIRouter(tags=["Conversations"])
 
 
 # ------------------------------------------------------------------
