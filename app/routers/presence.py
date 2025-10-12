@@ -5,7 +5,7 @@ from typing import Optional
 from app.schemas.conversation import ConversationMember
 from app.routers.user import get_current_user   # 👈 for identifying the caller
 
-router = APIRouter(prefix="/api", tags=["Presence"])
+router = APIRouter(tags=["Presence"])
 
 
 @router.get("/active-users", response_model=list[ConversationMember])
