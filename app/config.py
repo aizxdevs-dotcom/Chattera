@@ -65,7 +65,7 @@ redis_client: Redis | None = None
 SECRET_KEY = os.getenv("SECRET_KEY") or os.urandom(32).hex()
 ALGORITHM = "HS256"
 ISSUER = "chattera-backend"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", 7))
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):

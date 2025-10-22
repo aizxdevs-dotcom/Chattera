@@ -15,7 +15,7 @@ class CommentResponse(BaseModel):
     comment_id: str
     description: Optional[str] = None          # ✅ match your model
     created_at: datetime.datetime
-    user_id: str
+    user_id: Optional[str] = None
     post_id: str
     files: List[FileResponse] = []             # ✅ return file metadata
     reactions: Dict[str, int] = {}             # ✅ reaction counts
