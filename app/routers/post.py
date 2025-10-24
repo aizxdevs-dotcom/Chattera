@@ -127,7 +127,7 @@ def get_post(post_id: str, current_user_id: str = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Post not found")
 
     author_node = post_node.author.single()
-    user_id = author_node.user_id if author_node else None
+    user_id = author_node.user_id if author_node else ""
 
     files = [
         FileResponse(
@@ -247,9 +247,10 @@ def get_global_feed(current_user_id: Optional[str] = Query(default=None)):
     for post in posts:
         # --- Author information ---
         author_node = post.author.single()
-        user_id = getattr(author_node, "user_id", None)
-        username = getattr(author_node, "username", None)
-        email = getattr(author_node, "email", None)
+        # Ensure strings for required FeedPostResponse fields (schema requires non-null strings)
+        user_id = getattr(author_node, "user_id", "")
+        username = getattr(author_node, "username", "")
+        email = getattr(author_node, "email", "")
         profile_url = getattr(author_node, "profile_photo", None)
 
         # --- Post files ---
