@@ -8,22 +8,13 @@ import logging
 from datetime import datetime, timedelta
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
-from typing import List, Tuple, Optional
-import json
-import urllib.request
-import urllib.error
-import asyncio
+from typing import List, Optional
+# stdlib only; no SendGrid or extra HTTP deps
 
 from app.config import (
     SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, 
     SMTP_FROM_EMAIL, SMTP_FROM_NAME
 )
-
-# Optional SendGrid configuration (HTTP API)
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", SMTP_FROM_EMAIL)
-SENDGRID_SEND_URL = "https://api.sendgrid.com/v3/mail/send"
-
 
 # FastAPI-Mail Configuration
 conf = ConnectionConfig(
@@ -44,9 +35,13 @@ fm = FastMail(conf)
 
 
 async def _send_message_with_fallback(message: MessageSchema) -> bool:
-    """Try sending with the primary config, and fall back to SSL(465) if STARTTLS fails (common with Gmail)."""
+    """Send via SMTP (FastMail). If STARTTLS on 587 fails (common with Gmail) try SSL on 465.
+
+    Returns True on success, False if all SMTP attempts fail.
+    """
     try:
         await fm.send_message(message)
+        logging.info("✅ Email sent via primary SMTP (%s:%s)", SMTP_HOST, SMTP_PORT)
         return True
     except Exception as exc:
         logging.exception("⚠️ Failed to send email with primary SMTP (%s:%s): %s", SMTP_HOST, SMTP_PORT, exc)
@@ -76,149 +71,14 @@ async def _send_message_with_fallback(message: MessageSchema) -> bool:
             except Exception as exc2:
                 logging.exception("⚠️ SSL fallback also failed: %s", exc2)
 
-        # If SMTP attempts failed and SendGrid is configured, try SendGrid HTTP API as a fallback
-        if SENDGRID_API_KEY:
-            logging.info("Attempting SendGrid HTTP API fallback")
-            try:
-                ok = await _send_via_sendgrid(message)
-                if ok:
-                    logging.info("✅ Email sent via SendGrid HTTP API")
-                    return True
-            except Exception as exc3:
-                logging.exception("⚠️ SendGrid fallback failed: %s", exc3)
-
-        # If we reached here, all attempts failed
+        # All SMTP attempts failed
+        logging.error("All SMTP attempts failed (primary + SSL fallback)")
         return False
-        """Send the message using SendGrid first (if configured), then SMTP with optional SSL fallback.
-
-        Order of attempts:
-          1. SendGrid HTTP API (if SENDGRID_API_KEY provided)
-          2. Primary SMTP via FastMail (configured `conf`)
-          3. SSL SMTP fallback on port 465 (common fallback for Gmail)
-
-        Returns True on first successful send, False if all methods fail.
-        """
-
-        # 1) Try SendGrid first when available (preferred in many PaaS environments)
-        if SENDGRID_API_KEY:
-            try:
-                logging.info("Attempting to send email via SendGrid HTTP API (primary)")
-                ok = await _send_via_sendgrid(message)
-                if ok:
-                    logging.info("✅ Email sent via SendGrid HTTP API (primary)")
-                    return True
-                logging.warning("SendGrid HTTP API returned non-success; falling back to SMTP")
-            except Exception as exc:
-                logging.exception("⚠️ SendGrid primary attempt raised an exception: %s", exc)
-
-        # 2) Try primary SMTP via FastMail
-        try:
-            await fm.send_message(message)
-            logging.info("✅ Email sent via primary SMTP (%s:%s)", SMTP_HOST, SMTP_PORT)
-            return True
-        except Exception as exc:
-            logging.exception("⚠️ Failed to send email with primary SMTP (%s:%s): %s", SMTP_HOST, SMTP_PORT, exc)
-
-        # 3) If primary is gmail STARTTLS on 587, try SSL on 465 as a fallback
-        try_ssl_fallback = SMTP_HOST and ("gmail" in SMTP_HOST.lower() or "smtp.gmail.com" in SMTP_HOST.lower()) and SMTP_PORT == 587
-        if try_ssl_fallback:
-            logging.info("Attempting SSL fallback to smtp.gmail.com:465")
-            try:
-                alt_conf = ConnectionConfig(
-                    MAIL_USERNAME=SMTP_USERNAME,
-                    MAIL_PASSWORD=SMTP_PASSWORD,
-                    MAIL_FROM=SMTP_FROM_EMAIL,
-                    MAIL_PORT=465,
-                    MAIL_SERVER=SMTP_HOST,
-                    MAIL_FROM_NAME=SMTP_FROM_NAME,
-                    MAIL_STARTTLS=False,
-                    MAIL_SSL_TLS=True,
-                    USE_CREDENTIALS=True,
-                    VALIDATE_CERTS=True,
-                    TIMEOUT=int(os.getenv("SMTP_TIMEOUT", 15)),
-                )
-                alt_fm = FastMail(alt_conf)
-                await alt_fm.send_message(message)
-                logging.info("✅ Email sent via SSL fallback (smtp.gmail.com:465)")
-                return True
-            except Exception as exc2:
-                logging.exception("⚠️ SSL fallback also failed: %s", exc2)
-
-        # All attempts failed
-        logging.error("All email send attempts failed (SendGrid + SMTP + SSL fallback)")
-        return False
-
-
-async def _send_via_sendgrid(message: MessageSchema) -> bool:
-    """Send the message via SendGrid using the stdlib (runs in threadpool). Returns True on success."""
-    if not SENDGRID_API_KEY:
-        return False
-
-    subject = getattr(message, "subject", "")
-    recipients = getattr(message, "recipients", []) or []
-    body = getattr(message, "body", "")
-
-    if not recipients:
-        logging.warning("No recipients for SendGrid send")
-        return False
-
-    to_email = recipients[0]
-
-    try:
-        status, resp_body = await send_via_sendgrid_async(to_email, subject, body, SENDGRID_FROM_EMAIL)
-        if 200 <= status < 300:
-            return True
-        logging.error("SendGrid API returned %s: %s", status, resp_body)
-        return False
-    except Exception as exc:
-        logging.exception("SendGrid send failed (exception): %s", exc)
-        return False
-
-
-def _send_via_sendgrid_sync(to_email: str, subject: str, html_body: str, from_email: str) -> Tuple[int, str]:
-    """Blocking send to SendGrid using urllib. Returns (status_code, response_body)."""
-    payload = {
-        "personalizations": [{
-            "to": [{"email": to_email}]
-        }],
-        "from": {"email": from_email},
-        "subject": subject,
-        "content": [{"type": "text/html", "value": html_body}],
-    }
-
-    data = json.dumps(payload).encode("utf-8")
-    headers = {
-        "Authorization": f"Bearer {SENDGRID_API_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    req = urllib.request.Request(SENDGRID_SEND_URL, data=data, headers=headers, method="POST")
-    timeout = int(os.getenv("SENDGRID_TIMEOUT", 15))
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            status = resp.getcode()
-            body = resp.read().decode("utf-8", errors="ignore")
-            return status, body
-    except urllib.error.HTTPError as he:
-        try:
-            body = he.read().decode("utf-8", errors="ignore")
-        except Exception:
-            body = str(he)
-        return getattr(he, "code", 500), body
-    except Exception as exc:
-        # re-raise to be handled by caller async wrapper
-        raise
-
-
-async def send_via_sendgrid_async(to_email: str, subject: str, html_body: str, from_email: str) -> Tuple[int, str]:
-    """Async wrapper that runs the blocking urllib SendGrid call in a threadpool."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _send_via_sendgrid_sync, to_email, subject, html_body, from_email)
 
 
 def generate_otp() -> str:
-    """Generate a 4-digit OTP code"""
-    return str(random.randint(1000, 9999))
+    """Generate a 4-digit OTP code as a zero-padded string."""
+    return f"{random.randint(0, 9999):04d}"
 
 
 def get_otp_expiry() -> datetime:

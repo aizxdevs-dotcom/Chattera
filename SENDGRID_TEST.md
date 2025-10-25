@@ -2,16 +2,11 @@ SendGrid quick test (safe, no secrets in repo)
 =============================================
 
 Overview
---------
 This document explains how to safely test SendGrid from your local dev environment or deployment without committing secrets.
 
 Preconditions
--------------
-- You must create a SendGrid API key (Mail Send permission) in the SendGrid dashboard and copy it once.
-- Do NOT commit the API key into git. Use environment variables or your platform's secret manager.
 
 Environment variables (example)
---------------------------------
 Set these in your shell or deployment environment:
 
 ```bash
@@ -20,7 +15,6 @@ export SENDGRID_FROM_EMAIL="no-reply@yourdomain.com"
 ```
 
 Run the included test script
----------------------------
 From the repository root run:
 
 ```bash
@@ -32,20 +26,15 @@ SENDGRID_API_KEY="$SENDGRID_API_KEY" SENDGRID_FROM_EMAIL="$SENDGRID_FROM_EMAIL" 
 ```
 
 Expected results
-----------------
-- On success the script prints: `OK: SendGrid returned 202` and you should receive the test email.
-- On failure the script prints `ERROR: SendGrid returned <code>` and the response body (JSON) with details (e.g., invalid API key, missing permissions).
 
 If you see 401/403
------------------
-- 401/403 means the API key is invalid or lacks permissions. Recreate a new key with Mail Send permission and update the `SENDGRID_API_KEY` env var.
 
 Security notes (important)
---------------------------
-- Rotate any API key that was accidentally pasted into the repo or shared publicly.
-- Use separate keys for dev/staging/production.
-- Use your host's secret manager (Render/Heroku/Vercel/AWS Secrets Manager) for production keys.
 
 Optional: Use the official sendgrid-python SDK
---------------------------------------------
 If you'd rather use the official SDK, install `sendgrid` and use the example in SendGrid's dashboard — the API key usage is identical (the script here uses httpx to avoid adding another SDK).
+SendGrid tests removed
+
+The SendGrid quick test was removed from the repository and should be recreated locally if you need to test SendGrid. Do NOT commit API keys or secrets. Instead, run tests locally and set `SENDGRID_API_KEY` in your shell while testing.
+
+If you want, I can add a secure local test helper (that you run manually) or an example for how to test SMTP connectivity instead.
