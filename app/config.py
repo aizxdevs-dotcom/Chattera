@@ -73,6 +73,18 @@ if not SMTP_USERNAME or not SMTP_PASSWORD:
     print("⚠️ Warning: SMTP credentials not configured. Email features will not work.")
 
 # =========================================================
+# SendGrid / API provider configuration (optional)
+# =========================================================
+MAIL_PROVIDER = os.getenv("MAIL_PROVIDER", "smtp").lower()
+
+# SendGrid API key (when using SendGrid provider). Do NOT commit real keys to your repo.
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
+SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", SMTP_FROM_EMAIL)
+
+if MAIL_PROVIDER == "sendgrid" and not SENDGRID_API_KEY:
+    print("⚠️ Warning: MAIL_PROVIDER=sendgrid but SENDGRID_API_KEY is not set. Emails will fail.")
+
+# =========================================================
 #  JWT helpers
 # =========================================================
 SECRET_KEY = os.getenv("SECRET_KEY") or os.urandom(32).hex()

@@ -6,73 +6,31 @@ import os
 import random
 import logging
 from datetime import datetime, timedelta
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
-from pydantic import EmailStr
+# avoid dependency on pydantic for simple typing here
 from typing import List, Optional
-# stdlib only; no SendGrid or extra HTTP deps
 
 from app.config import (
-    SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, 
-    SMTP_FROM_EMAIL, SMTP_FROM_NAME
+    SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD,
+    SMTP_FROM_EMAIL, SMTP_FROM_NAME,
 )
 
-# FastAPI-Mail Configuration
-conf = ConnectionConfig(
-    MAIL_USERNAME=SMTP_USERNAME,
-    MAIL_PASSWORD=SMTP_PASSWORD,
-    MAIL_FROM=SMTP_FROM_EMAIL,
-    MAIL_PORT=SMTP_PORT,
-    MAIL_SERVER=SMTP_HOST,
-    MAIL_FROM_NAME=SMTP_FROM_NAME,
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True,
-    TIMEOUT=int(os.getenv("SMTP_TIMEOUT", 15)),
-)
-
-fm = FastMail(conf)
+# Use SendGrid API via stdlib provider (no httpx)
+from app.services.mail_api_provider import send_email_async
 
 
-async def _send_message_with_fallback(message: MessageSchema) -> bool:
-    """Send via SMTP (FastMail). If STARTTLS on 587 fails (common with Gmail) try SSL on 465.
-
-    Returns True on success, False if all SMTP attempts fail.
-    """
+async def _send_via_sendgrid_only(
+    to_email: str, subject: str, html_body: str, from_email: Optional[str] = None, timeout: int = 15
+) -> bool:
+    """Send email via SendGrid API (stdlib). Returns True on success."""
     try:
-        await fm.send_message(message)
-        logging.info("✅ Email sent via primary SMTP (%s:%s)", SMTP_HOST, SMTP_PORT)
-        return True
+        ok, status, body = await send_email_async(to_email, subject, html_body, from_email, timeout)
+        if ok:
+            logging.info("Email sent via SendGrid to %s (status=%s)", to_email, status)
+            return True
+        logging.error("SendGrid API returned non-success for %s: %s - %s", to_email, status, (body[:200] if isinstance(body, (bytes, bytearray)) else body))
+        return False
     except Exception as exc:
-        logging.exception("⚠️ Failed to send email with primary SMTP (%s:%s): %s", SMTP_HOST, SMTP_PORT, exc)
-
-        # If primary is gmail STARTTLS on 587, try SSL on 465 as a fallback
-        try_ssl_fallback = SMTP_HOST and ("gmail" in SMTP_HOST.lower() or "smtp.gmail.com" in SMTP_HOST.lower()) and SMTP_PORT == 587
-        if try_ssl_fallback:
-            logging.info("Attempting SSL fallback to smtp.gmail.com:465")
-            try:
-                alt_conf = ConnectionConfig(
-                    MAIL_USERNAME=SMTP_USERNAME,
-                    MAIL_PASSWORD=SMTP_PASSWORD,
-                    MAIL_FROM=SMTP_FROM_EMAIL,
-                    MAIL_PORT=465,
-                    MAIL_SERVER=SMTP_HOST,
-                    MAIL_FROM_NAME=SMTP_FROM_NAME,
-                    MAIL_STARTTLS=False,
-                    MAIL_SSL_TLS=True,
-                    USE_CREDENTIALS=True,
-                    VALIDATE_CERTS=True,
-                    TIMEOUT=int(os.getenv("SMTP_TIMEOUT", 15)),
-                )
-                alt_fm = FastMail(alt_conf)
-                await alt_fm.send_message(message)
-                logging.info("✅ Email sent via SSL fallback (smtp.gmail.com:465)")
-                return True
-            except Exception as exc2:
-                logging.exception("⚠️ SSL fallback also failed: %s", exc2)
-
-        # All SMTP attempts failed
-        logging.error("All SMTP attempts failed (primary + SSL fallback)")
+        logging.exception("SendGrid send failed for %s: %s", to_email, exc)
         return False
 
 
@@ -86,7 +44,7 @@ def get_otp_expiry() -> datetime:
     return datetime.utcnow() + timedelta(minutes=10)
 
 
-async def send_verification_email(email: EmailStr, username: str, otp_code: str):
+async def send_verification_email(email: str, username: str, otp_code: str):
     """Send email verification OTP to user"""
     
     html_content = f"""
@@ -181,19 +139,13 @@ async def send_verification_email(email: EmailStr, username: str, otp_code: str)
     </html>
     """
     
-    message = MessageSchema(
-        subject="🔐 Verify Your Email - Soceyo",
-        recipients=[email],
-        body=html_content,
-        subtype=MessageType.html,
-    )
-    
-    sent = await _send_message_with_fallback(message)
+    subject = "🔐 Verify Your Email - Soceyo"
+    sent = await _send_via_sendgrid_only(email, subject, html_content)
     if not sent:
-        raise Exception("Failed to send verification email: SMTP connection failed or timed out")
+        raise Exception("Failed to send verification email via SendGrid")
 
 
-async def send_password_reset_email(email: EmailStr, username: str, otp_code: str):
+async def send_password_reset_email(email: str, username: str, otp_code: str):
     """Send password reset OTP to user"""
     
     html_content = f"""
@@ -289,19 +241,13 @@ async def send_password_reset_email(email: EmailStr, username: str, otp_code: st
     </html>
     """
     
-    message = MessageSchema(
-        subject="🔐 Reset Your Password - Soceyo",
-        recipients=[email],
-        body=html_content,
-        subtype=MessageType.html,
-    )
-    
-    sent = await _send_message_with_fallback(message)
+    subject = "🔐 Reset Your Password - Soceyo"
+    sent = await _send_via_sendgrid_only(email, subject, html_content)
     if not sent:
-        raise Exception("Failed to send password reset email: SMTP connection failed or timed out")
+        raise Exception("Failed to send password reset email via SendGrid")
 
 
-async def send_welcome_email(email: EmailStr, username: str):
+async def send_welcome_email(email: str, username: str):
     """Send welcome email after successful verification"""
     
     html_content = f"""
@@ -384,13 +330,7 @@ async def send_welcome_email(email: EmailStr, username: str):
     </html>
     """
     
-    message = MessageSchema(
-        subject="🎉 Welcome to Soceyo!",
-        recipients=[email],
-        body=html_content,
-        subtype=MessageType.html,
-    )
-    
-    sent = await _send_message_with_fallback(message)
+    subject = "🎉 Welcome to Soceyo!"
+    sent = await _send_via_sendgrid_only(email, subject, html_content)
     if not sent:
-        raise Exception("Failed to send welcome email: SMTP connection failed or timed out")
+        raise Exception("Failed to send welcome email via SendGrid")

@@ -10,7 +10,7 @@ from app.routers import (
     post, reaction, comment,
     invitation, contact, presence
 )
-from app.routers import email_health_tcp
+from app.routers import email_health_http
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import notification
 from app.routers import ws_chat
@@ -46,7 +46,7 @@ app.include_router(comment.router, prefix="/api")
 app.include_router(presence.router, prefix="/api")
 app.include_router(notification.router, prefix="/api")
 app.include_router(ws_chat.router)
-app.include_router(email_health_tcp.router)
+app.include_router(email_health_http.router)
 
 
 # ——— Startup / Shutdown ———
